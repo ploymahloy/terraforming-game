@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+    <title>Terraform</title>
+</head>
+
+<body>
+  <div id="app">
+    <canvas id="game-canvas"></canvas>
+
+    <div id="boot-screen" class="overlay">
+      <div class="boot-panel">
+        <h1 class="brand">Terraform</h1>
+        <p class="boot-sub">Choose a base terrain to begin shaping your world.</p>
+        <div id="terrain-picker" class="terrain-picker"></div>
+      </div>
+    </div>
+
+    <div id="hud" class="hud hidden">
+      <header class="hud-bar">
+        <div class="brand-mini">Terraform</div>
+        <div class="mode-tabs" id="mode-tabs">
+          <button type="button" data-mode="terraform" class="active">Shape</button>
+          <button type="button" data-mode="water">Water</button>
+          <button type="button" data-mode="life">Life</button>
+        </div>
+        <div class="hint">RMB orbit · scroll zoom · LMB tool</div>
+      </header>
+
+      <aside class="tool-panel" id="tool-panel">
+        <div class="panel-section" id="brush-section">
+          <label class="panel-label">Brush</label>
+          <div class="tool-row" id="brush-tools">
+            <button type="button" data-brush="raise" class="active" title="Raise (1)">Raise</button>
+            <button type="button" data-brush="lower" title="Lower (2)">Lower</button>
+            <button type="button" data-brush="smooth" title="Smooth (3)">Smooth</button>
+            <button type="button" data-brush="flatten" title="Flatten (4)">Flatten</button>
+          </div>
+          <label class="panel-label" for="brush-size">Size <span id="brush-size-value">4.0</span></label>
+          <input id="brush-size" type="range" min="1" max="16" step="0.5" value="4" />
+        </div>
+
+        <div class="panel-section hidden" id="life-section">
+          <label class="panel-label">Place</label>
+          <div class="tool-row" id="life-tools">
+            <button type="button" data-life="tree" class="active">Tree</button>
+            <button type="button" data-life="bush">Bush</button>
+            <button type="button" data-life="critter">Critter</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+
+</html>
