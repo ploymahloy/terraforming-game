@@ -1,5 +1,5 @@
 import './style.css';
-import { GameApp } from './game/GameApp';
+import { createGame, initGame } from './game/GameApp';
 
 async function main(): Promise<void> {
   const canvas = document.getElementById('game-canvas');
@@ -7,8 +7,8 @@ async function main(): Promise<void> {
     throw new Error('Missing #game-canvas');
   }
 
-  const app = new GameApp(canvas);
-  await app.init();
+  const game = createGame(canvas);
+  await initGame(game);
 }
 
 main().catch((err) => {
