@@ -21,6 +21,7 @@ export class PourTool {
   private pourPoint = new THREE.Vector3();
   private pourCell = { x: 0, z: 0 };
   private emitAcc = 0;
+  rateMultiplier = 1;
   readonly points: THREE.Points;
   private readonly positions: Float32Array;
   private readonly geometry: THREE.BufferGeometry;
@@ -50,7 +51,7 @@ export class PourTool {
     this.pourPoint.copy(world);
     this.pourCell = { ...cell };
     // Immediate splash so short clicks still leave a puddle
-    this.emitAcc = 8;
+    this.emitAcc = 8 * this.rateMultiplier;
   }
 
   move(world: THREE.Vector3, cell: { x: number; z: number }): void {
@@ -68,7 +69,7 @@ export class PourTool {
     addWater: (cx: number, cz: number, amount: number) => void,
   ): void {
     if (this.pouring) {
-      this.emitAcc += POUR_RATE * dt;
+      this.emitAcc += POUR_RATE * this.rateMultiplier * dt;
       while (this.emitAcc >= 1 && this.particles.length < MAX_PARTICLES) {
         this.emitAcc -= 1;
         this.spawnParticle(terrain);

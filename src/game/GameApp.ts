@@ -56,6 +56,9 @@ export class GameApp {
       onModeChange: (mode) => this.setMode(mode),
       onBrushChange: (brush) => this.setBrush(brush),
       onBrushSizeChange: (size) => this.setBrushSize(size),
+      onPourRateChange: (rate) => {
+        this.pour.rateMultiplier = rate;
+      },
       onLifeKindChange: (kind) => {
         this.lifeKind = kind;
       },

@@ -254,9 +254,17 @@ body {
   margin-bottom: 0.85rem;
 }
 
-#brush-size {
+#brush-size,
+#pour-rate {
   width: 100%;
   accent-color: var(--accent);
+}
+
+.panel-hint {
+  margin: 0 0 0.85rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--muted);
 }
 
 @keyframes fade-in {

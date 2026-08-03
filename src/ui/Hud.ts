@@ -6,6 +6,7 @@ export interface HudCallbacks {
   onModeChange: (mode: GameMode) => void;
   onBrushChange: (brush: BrushType) => void;
   onBrushSizeChange: (size: number) => void;
+  onPourRateChange: (rate: number) => void;
   onLifeKindChange: (kind: LifeKind) => void;
 }
 
@@ -13,9 +14,12 @@ export class Hud {
   private readonly boot = document.getElementById('boot-screen')!;
   private readonly hud = document.getElementById('hud')!;
   private readonly brushSection = document.getElementById('brush-section')!;
+  private readonly waterSection = document.getElementById('water-section')!;
   private readonly lifeSection = document.getElementById('life-section')!;
   private readonly brushSize = document.getElementById('brush-size') as HTMLInputElement;
   private readonly brushSizeValue = document.getElementById('brush-size-value')!;
+  private readonly pourRate = document.getElementById('pour-rate') as HTMLInputElement;
+  private readonly pourRateValue = document.getElementById('pour-rate-value')!;
   private mode: GameMode = 'terraform';
   private readonly cb: HudCallbacks;
 
@@ -26,6 +30,7 @@ export class Hud {
     this.bindBrushes();
     this.bindLife();
     this.bindBrushSize();
+    this.bindPourRate();
     this.bindKeys();
   }
 
@@ -40,9 +45,8 @@ export class Hud {
       btn.classList.toggle('active', (btn as HTMLElement).dataset.mode === mode);
     });
     this.brushSection.classList.toggle('hidden', mode !== 'terraform');
+    this.waterSection.classList.toggle('hidden', mode !== 'water');
     this.lifeSection.classList.toggle('hidden', mode !== 'life');
-    const panel = document.getElementById('tool-panel')!;
-    panel.classList.toggle('hidden', mode === 'water');
   }
 
   private buildTerrainPicker(): void {
@@ -104,6 +108,15 @@ export class Hud {
       this.cb.onBrushSizeChange(size);
     };
     this.brushSize.addEventListener('input', update);
+  }
+
+  private bindPourRate(): void {
+    const update = () => {
+      const rate = Number(this.pourRate.value);
+      this.pourRateValue.textContent = rate.toFixed(1);
+      this.cb.onPourRateChange(rate);
+    };
+    this.pourRate.addEventListener('input', update);
   }
 
   private bindKeys(): void {
