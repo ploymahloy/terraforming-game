@@ -10,6 +10,7 @@ export const CAMERA = {
   maxDistance: 60,
   maxPolarAngle: Math.PI * 0.48,
   dampingFactor: 0.08,
+  strafeSpeed: 12,
 } as const;
 
 export type GameMode = 'terraform' | 'water' | 'life';

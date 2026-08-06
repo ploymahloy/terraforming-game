@@ -2,9 +2,15 @@ import * as THREE from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CAMERA } from '../config';
 
+const _right = new THREE.Vector3();
+
 export interface Orbit {
   camera: THREE.PerspectiveCamera;
   controls: OrbitControls;
+  strafeLeft: boolean;
+  strafeRight: boolean;
+  onKeyDown: (e: KeyboardEvent) => void;
+  onKeyUp: (e: KeyboardEvent) => void;
 }
 
 export function createOrbit(canvas: HTMLCanvasElement): Orbit {
@@ -32,7 +38,35 @@ export function createOrbit(canvas: HTMLCanvasElement): Orbit {
     TWO: THREE.TOUCH.DOLLY_PAN,
   };
 
-  return { camera, controls };
+  const orbit: Orbit = {
+    camera,
+    controls,
+    strafeLeft: false,
+    strafeRight: false,
+    onKeyDown: () => {},
+    onKeyUp: () => {},
+  };
+
+  orbit.onKeyDown = (e: KeyboardEvent) => {
+    if (e.target instanceof HTMLInputElement) return;
+    if (e.code === 'KeyA') {
+      orbit.strafeLeft = true;
+      e.preventDefault();
+    } else if (e.code === 'KeyD') {
+      orbit.strafeRight = true;
+      e.preventDefault();
+    }
+  };
+
+  orbit.onKeyUp = (e: KeyboardEvent) => {
+    if (e.code === 'KeyA') orbit.strafeLeft = false;
+    else if (e.code === 'KeyD') orbit.strafeRight = false;
+  };
+
+  window.addEventListener('keydown', orbit.onKeyDown);
+  window.addEventListener('keyup', orbit.onKeyUp);
+
+  return orbit;
 }
 
 export function resizeOrbit(orbit: Orbit, width: number, height: number): void {
@@ -40,10 +74,26 @@ export function resizeOrbit(orbit: Orbit, width: number, height: number): void {
   orbit.camera.updateProjectionMatrix();
 }
 
-export function updateOrbit(orbit: Orbit): void {
+export function updateOrbit(orbit: Orbit, dt: number): void {
+  let dir = 0;
+  if (orbit.strafeLeft) dir -= 1;
+  if (orbit.strafeRight) dir += 1;
+
+  if (dir !== 0) {
+    orbit.camera.getWorldDirection(_right);
+    _right.cross(orbit.camera.up).setY(0);
+    if (_right.lengthSq() > 1e-8) {
+      _right.normalize().multiplyScalar(dir * CAMERA.strafeSpeed * dt);
+      orbit.camera.position.add(_right);
+      orbit.controls.target.add(_right);
+    }
+  }
+
   orbit.controls.update();
 }
 
 export function disposeOrbit(orbit: Orbit): void {
+  window.removeEventListener('keydown', orbit.onKeyDown);
+  window.removeEventListener('keyup', orbit.onKeyUp);
   orbit.controls.dispose();
 }

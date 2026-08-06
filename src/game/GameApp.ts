@@ -294,7 +294,7 @@ function resize(game: Game): void {
 
 function frame(game: Game): void {
   const dt = Math.min(game.clock.getDelta(), 0.05);
-  updateOrbit(game.orbit);
+  updateOrbit(game.orbit, dt);
 
   if (game.started) {
     flushIfDirty(game.terrain);
