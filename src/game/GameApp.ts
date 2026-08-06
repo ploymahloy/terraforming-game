@@ -136,7 +136,7 @@ export async function initGame(game: Game): Promise<void> {
 
 function setupScene(game: Game): void {
   game.scene.background = new THREE.Color('#6a8fad');
-  game.scene.fog = new THREE.Fog('#9bb3a8', 55, 160);
+  game.scene.fog = new THREE.Fog('#9bb3a8', 28, 80);
 
   game.scene.add(game.terrain.mesh);
   game.scene.add(game.water.mesh);
@@ -146,7 +146,7 @@ function setupScene(game: Game): void {
 
   // Soft ground shadow disc under the map for presence
   const disc = new THREE.Mesh(
-    new THREE.CircleGeometry(38, 48),
+    new THREE.CircleGeometry(19, 48),
     new THREE.MeshBasicMaterial({
       color: 0x1e2a28,
       transparent: true,
@@ -164,7 +164,7 @@ function setupLights(game: Game): void {
   game.scene.add(hemi);
 
   const sun = new THREE.DirectionalLight(0xfff2d6, 1.35);
-  sun.position.set(30, 50, 18);
+  sun.position.set(15, 25, 9);
   game.scene.add(sun);
 
   const fill = new THREE.DirectionalLight(0x8eb0c8, 0.35);

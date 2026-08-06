@@ -9,7 +9,7 @@ export interface Orbit {
 
 export function createOrbit(canvas: HTMLCanvasElement): Orbit {
   const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
-  camera.position.set(28, 32, 36);
+  camera.position.set(14, 16, 18);
 
   const controls = new OrbitControls(camera, canvas);
   controls.target.set(0, 0, 0);
