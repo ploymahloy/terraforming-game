@@ -133,6 +133,20 @@ export function clearLife(life: Life): void {
   life.entities = [];
 }
 
+export function restoreEntities(
+  life: Life,
+  items: Array<{ kind: LifeKind; cellX: number; cellZ: number; age: number }>,
+  terrain: Terrain,
+): void {
+  clearLife(life);
+  for (const item of items) {
+    const entity = placeLife(life, item.kind, item.cellX, item.cellZ, terrain);
+    if (!entity) continue;
+    entity.age = item.age;
+    entity.stage = stageForAge(item.age);
+  }
+}
+
 /** Lifecycle tick — ages entities and scales mesh by stage (simple visual growth). */
 export function tickLife(life: Life, dt: number, terrain: Terrain): void {
   for (const e of life.entities) {

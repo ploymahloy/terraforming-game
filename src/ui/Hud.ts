@@ -1,6 +1,9 @@
 import type { BrushType, GameMode, LifeKind, TerrainPresetId } from '../config';
 import { TERRAIN_PRESETS } from '../terrain/TerrainPresets';
 
+export const WALK_HINT = 'Arrows move · Space jump';
+export const TOOL_HINT = 'RMB orbit · A/D pan · scroll zoom · LMB tool';
+
 export interface HudCallbacks {
   onSelectTerrain: (id: TerrainPresetId) => void;
   onModeChange: (mode: GameMode) => void;
@@ -8,6 +11,8 @@ export interface HudCallbacks {
   onBrushSizeChange: (size: number) => void;
   onPourRateChange: (rate: number) => void;
   onLifeKindChange: (kind: LifeKind) => void;
+  onShareSpace: () => void;
+  onJoinSpace: (code: string) => void;
 }
 
 export interface Hud {
@@ -16,10 +21,15 @@ export interface Hud {
   brushSection: HTMLElement;
   waterSection: HTMLElement;
   lifeSection: HTMLElement;
+  toolPanel: HTMLElement;
   brushSize: HTMLInputElement;
   brushSizeValue: HTMLElement;
   pourRate: HTMLInputElement;
   pourRateValue: HTMLElement;
+  joinCode: HTMLInputElement;
+  joinError: HTMLElement;
+  shareCode: HTMLElement;
+  hint: HTMLElement;
   mode: GameMode;
   cb: HudCallbacks;
 }
@@ -31,10 +41,15 @@ export function createHud(cb: HudCallbacks): Hud {
     brushSection: document.getElementById('brush-section')!,
     waterSection: document.getElementById('water-section')!,
     lifeSection: document.getElementById('life-section')!,
+    toolPanel: document.getElementById('tool-panel')!,
     brushSize: document.getElementById('brush-size') as HTMLInputElement,
     brushSizeValue: document.getElementById('brush-size-value')!,
     pourRate: document.getElementById('pour-rate') as HTMLInputElement,
     pourRateValue: document.getElementById('pour-rate-value')!,
+    joinCode: document.getElementById('join-code') as HTMLInputElement,
+    joinError: document.getElementById('join-error')!,
+    shareCode: document.getElementById('share-code')!,
+    hint: document.getElementById('hud-hint')!,
     mode: 'terraform',
     cb,
   };
@@ -46,6 +61,8 @@ export function createHud(cb: HudCallbacks): Hud {
   bindBrushSize(hud);
   bindPourRate(hud);
   bindKeys(hud);
+  bindShare(hud);
+  bindJoin(hud);
 
   return hud;
 }
@@ -63,6 +80,26 @@ export function setHudMode(hud: Hud, mode: GameMode): void {
   hud.brushSection.classList.toggle('hidden', mode !== 'terraform');
   hud.waterSection.classList.toggle('hidden', mode !== 'water');
   hud.lifeSection.classList.toggle('hidden', mode !== 'life');
+  hud.toolPanel.classList.toggle('hidden', mode === 'walk');
+  hud.hint.textContent = mode === 'walk' ? WALK_HINT : TOOL_HINT;
+}
+
+export function showShareCode(hud: Hud, code: string): void {
+  hud.shareCode.textContent = code;
+  hud.shareCode.classList.remove('hidden');
+}
+
+export function showJoinError(hud: Hud, reason: string): void {
+  const text =
+    reason === 'not_found'
+      ? 'Room not found'
+      : reason === 'room_full'
+        ? 'Room is full'
+        : reason === 'not_started'
+          ? 'World has not started'
+          : 'Could not join';
+  hud.joinError.textContent = text;
+  hud.joinError.classList.remove('hidden');
 }
 
 function buildTerrainPicker(hud: Hud): void {
@@ -133,6 +170,24 @@ function bindPourRate(hud: Hud): void {
     hud.cb.onPourRateChange(rate);
   };
   hud.pourRate.addEventListener('input', update);
+}
+
+function bindShare(hud: Hud): void {
+  document.getElementById('share-space')!.addEventListener('click', () => {
+    hud.cb.onShareSpace();
+  });
+}
+
+function bindJoin(hud: Hud): void {
+  const submit = () => {
+    const code = hud.joinCode.value.trim().toUpperCase();
+    if (!code) return;
+    hud.cb.onJoinSpace(code);
+  };
+  document.getElementById('join-space')!.addEventListener('click', submit);
+  hud.joinCode.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submit();
+  });
 }
 
 function bindKeys(hud: Hud): void {

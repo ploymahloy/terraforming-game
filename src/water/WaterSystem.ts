@@ -41,6 +41,11 @@ export function resetWater(water: Water): void {
   water.dirty = true;
 }
 
+export function setDepths(water: Water, depths: Float32Array): void {
+  water.depths.set(depths);
+  water.dirty = true;
+}
+
 export function addWater(water: Water, cx: number, cz: number, amount: number): void {
   const i = cz * GRID_SIZE + cx;
   water.depths[i] = Math.min(MAX_DEPTH, water.depths[i] + amount);

@@ -13,7 +13,20 @@ export const CAMERA = {
   strafeSpeed: 12,
 } as const;
 
-export type GameMode = 'terraform' | 'water' | 'life';
+export const PLAYER = {
+  walkSpeed: 5,
+  turnSpeed: 2.2,
+  jumpSpeed: 7,
+  gravity: -22,
+  capsuleHalfHeight: 0.8,
+  capsuleRadius: 0.35,
+  poseHz: 15,
+  cameraDistance: 6,
+  cameraHeight: 2.2,
+  remoteLerp: 12,
+} as const;
+
+export type GameMode = 'terraform' | 'water' | 'life' | 'walk';
 export type BrushType = 'raise' | 'lower' | 'smooth' | 'flatten';
 export type LifeKind = 'tree' | 'bush' | 'critter';
 export type TerrainPresetId = 'plains' | 'hills' | 'crater' | 'ridges';
