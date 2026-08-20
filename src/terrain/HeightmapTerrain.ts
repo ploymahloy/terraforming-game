@@ -77,7 +77,7 @@ export function getHeight(terrain: Terrain, cx: number, cz: number): number {
   return terrain.heights[cz * GRID_SIZE + cx] ?? 0;
 }
 
-export function sampleHeightWorld(terrain: Terrain, wx: number, wz: number): number {
+export function sampleHeightFromGrid(heights: ArrayLike<number>, wx: number, wz: number): number {
   const half = WORLD_SIZE * 0.5;
   const fx = ((wx + half) / WORLD_SIZE) * (GRID_SIZE - 1);
   const fz = ((wz + half) / WORLD_SIZE) * (GRID_SIZE - 1);
@@ -88,14 +88,18 @@ export function sampleHeightWorld(terrain: Terrain, wx: number, wz: number): num
   const tx = fx - x0;
   const tz = fz - z0;
 
-  const h00 = getHeight(terrain, x0, z0);
-  const h10 = getHeight(terrain, x1, z0);
-  const h01 = getHeight(terrain, x0, z1);
-  const h11 = getHeight(terrain, x1, z1);
+  const h00 = heights[z0 * GRID_SIZE + x0] ?? 0;
+  const h10 = heights[z0 * GRID_SIZE + x1] ?? 0;
+  const h01 = heights[z1 * GRID_SIZE + x0] ?? 0;
+  const h11 = heights[z1 * GRID_SIZE + x1] ?? 0;
 
   const a = h00 + (h10 - h00) * tx;
   const b = h01 + (h11 - h01) * tx;
   return a + (b - a) * tz;
+}
+
+export function sampleHeightWorld(terrain: Terrain, wx: number, wz: number): number {
+  return sampleHeightFromGrid(terrain.heights, wx, wz);
 }
 
 export function setHeights(terrain: Terrain, source: Float32Array): void {

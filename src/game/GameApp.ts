@@ -1,13 +1,19 @@
 import * as THREE from 'three/webgpu';
+import { applyThirdPerson } from '../camera/ThirdPersonCamera';
 import { createOrbit, resizeOrbit, updateOrbit, type Orbit } from '../camera/OrbitCamera';
 import {
   CELL_SIZE,
+  PLAYER,
   type BrushType,
   type GameMode,
   type LifeKind,
   type TerrainPresetId,
 } from '../config';
-import { clearLife, createLife, placeLife, tickLife, type Life } from '../life/LifeSystem';
+import { clearLife, createLife, placeLife, restoreEntities, tickLife, type Life } from '../life/LifeSystem';
+import { createMultiplayerClient, type MpClient } from '../multiplayer/client';
+import type { PosePayload, Snapshot } from '../multiplayer/protocol';
+import { createAvatar, disposeAvatar } from '../player/Avatar';
+import { tickMotor, type MotorInput, type MotorState } from '../player/PlayerMotor';
 import {
   createTerrain,
   flushIfDirty,
@@ -35,15 +41,36 @@ import {
   tickPour,
   type Pour,
 } from '../tools/PourTool';
-import { createHud, setHudMode, showGameHud, type Hud } from '../ui/Hud';
+import {
+  createHud,
+  setHudMode,
+  showGameHud,
+  showJoinError,
+  showShareCode,
+  type Hud,
+} from '../ui/Hud';
 import {
   addWater,
   createWater,
   resetWater,
+  setDepths,
   syncWaterMesh,
   tickWater,
   type Water,
 } from '../water/WaterSystem';
+
+interface RemoteAvatar {
+  id: string;
+  mesh: THREE.Mesh;
+  x: number;
+  y: number;
+  z: number;
+  yaw: number;
+  visX: number;
+  visY: number;
+  visZ: number;
+  visYaw: number;
+}
 
 export interface Game {
   renderer: THREE.WebGPURenderer;
@@ -64,6 +91,15 @@ export interface Game {
   pointerDown: boolean;
   clock: THREE.Clock;
   canvas: HTMLCanvasElement;
+  mp: MpClient | null;
+  localPlayer: MotorState | null;
+  localAvatar: THREE.Mesh | null;
+  remotes: Map<string, RemoteAvatar>;
+  walkKeys: MotorInput;
+  poseAcc: number;
+  isHost: boolean;
+  roomCode: string | null;
+  playerId: string | null;
 }
 
 export function createGame(canvas: HTMLCanvasElement): Game {
@@ -103,6 +139,21 @@ export function createGame(canvas: HTMLCanvasElement): Game {
     pointerDown: false,
     clock: new THREE.Clock(),
     canvas,
+    mp: null as MpClient | null,
+    localPlayer: null as MotorState | null,
+    localAvatar: null as THREE.Mesh | null,
+    remotes: new Map<string, RemoteAvatar>(),
+    walkKeys: {
+      forward: false,
+      back: false,
+      turnLeft: false,
+      turnRight: false,
+      jump: false,
+    },
+    poseAcc: 0,
+    isHost: false,
+    roomCode: null as string | null,
+    playerId: null as string | null,
   };
 
   const hud = createHud({
@@ -116,6 +167,8 @@ export function createGame(canvas: HTMLCanvasElement): Game {
     onLifeKindChange: (kind) => {
       fullGame.lifeKind = kind;
     },
+    onShareSpace: () => shareSpace(fullGame),
+    onJoinSpace: (code) => joinSpace(fullGame, code),
   });
 
   const fullGame: Game = { ...game, hud };
@@ -123,6 +176,8 @@ export function createGame(canvas: HTMLCanvasElement): Game {
   setupScene(fullGame);
   setupLights(fullGame);
   bindPointer(fullGame);
+  bindWalkKeys(fullGame);
+  connectMultiplayer(fullGame);
   window.addEventListener('resize', () => resize(fullGame));
   resize(fullGame);
 
@@ -132,6 +187,167 @@ export function createGame(canvas: HTMLCanvasElement): Game {
 export async function initGame(game: Game): Promise<void> {
   await game.renderer.init();
   game.renderer.setAnimationLoop(() => frame(game));
+}
+
+function connectMultiplayer(game: Game): void {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  game.mp = createMultiplayerClient(`${proto}://${location.host}/mp`, {
+    onCreated: (msg) => {
+      game.isHost = true;
+      game.roomCode = msg.code;
+      game.playerId = msg.playerId;
+      ensureLocalPlayer(game, msg.playerId, msg.pose);
+      showShareCode(game.hud, msg.code);
+      sendLocalPose(game);
+    },
+    onJoined: (msg) => {
+      game.isHost = false;
+      game.roomCode = msg.code;
+      game.playerId = msg.playerId;
+      applySnapshot(game, msg.snapshot);
+      game.started = true;
+      showGameHud(game.hud);
+      setHudMode(game.hud, 'walk');
+      setMode(game, 'walk');
+      ensureLocalPlayer(game, msg.playerId, msg.pose);
+      for (const other of msg.others) {
+        upsertRemote(game, other.id, other);
+      }
+      sendLocalPose(game);
+    },
+    onError: (msg) => {
+      if (!game.started) showJoinError(game.hud, msg.reason);
+    },
+    onPose: (msg) => {
+      upsertRemote(game, msg.id, msg);
+    },
+    onPeerJoined: (msg) => {
+      if (msg.pose) upsertRemote(game, msg.id, msg.pose);
+      else upsertRemote(game, msg.id, { x: 0, y: 0, z: 0, yaw: 0 });
+    },
+    onPeerLeft: (msg) => {
+      removeRemote(game, msg.id);
+    },
+    onClose: () => {
+      if (!game.isHost) {
+        for (const id of [...game.remotes.keys()]) removeRemote(game, id);
+      }
+    },
+  });
+}
+
+function captureSnapshot(game: Game): Snapshot {
+  return {
+    heights: Array.from(game.terrain.heights),
+    waterDepths: Array.from(game.water.depths),
+    life: game.life.entities.map((e) => ({
+      kind: e.kind,
+      cellX: e.cellX,
+      cellZ: e.cellZ,
+      age: e.age,
+    })),
+  };
+}
+
+function applySnapshot(game: Game, snapshot: Snapshot): void {
+  setHeights(game.terrain, Float32Array.from(snapshot.heights));
+  setDepths(game.water, Float32Array.from(snapshot.waterDepths));
+  restoreEntities(game.life, snapshot.life, game.terrain);
+  syncWaterMesh(game.water, game.terrain);
+}
+
+function shareSpace(game: Game): void {
+  if (!game.started || !game.mp) return;
+  if (game.roomCode && !game.isHost) return;
+  game.mp.sendCreate(captureSnapshot(game));
+}
+
+function joinSpace(game: Game, code: string): void {
+  game.mp?.sendJoin(code);
+}
+
+function ensureLocalPlayer(game: Game, playerId: string, pose: PosePayload): void {
+  const keep = game.localPlayer;
+  const next: MotorState = keep
+    ? { ...keep }
+    : { x: pose.x, y: pose.y, z: pose.z, yaw: pose.yaw, vy: 0, grounded: true };
+  if (!keep) {
+    next.x = pose.x;
+    next.y = pose.y;
+    next.z = pose.z;
+    next.yaw = pose.yaw;
+  }
+  game.playerId = playerId;
+  game.localPlayer = next;
+  if (game.localAvatar) {
+    game.scene.remove(game.localAvatar);
+    disposeAvatar(game.localAvatar);
+  }
+  game.localAvatar = createAvatar(playerId);
+  game.scene.add(game.localAvatar);
+  syncLocalAvatar(game);
+}
+
+function sendLocalPose(game: Game): void {
+  const p = game.localPlayer;
+  if (!p || !game.mp) return;
+  game.mp.sendPose(p.x, p.y, p.z, p.yaw);
+  game.poseAcc = 0;
+}
+
+function syncLocalAvatar(game: Game): void {
+  const p = game.localPlayer;
+  if (!p || !game.localAvatar) return;
+  game.localAvatar.position.set(p.x, p.y, p.z);
+  game.localAvatar.rotation.y = p.yaw;
+}
+
+function upsertRemote(game: Game, id: string, pose: PosePayload): void {
+  if (id === game.playerId) return;
+  const existing = game.remotes.get(id);
+  if (existing) {
+    existing.x = pose.x;
+    existing.y = pose.y;
+    existing.z = pose.z;
+    existing.yaw = pose.yaw;
+    return;
+  }
+  const mesh = createAvatar(id);
+  game.scene.add(mesh);
+  mesh.position.set(pose.x, pose.y, pose.z);
+  mesh.rotation.y = pose.yaw;
+  game.remotes.set(id, {
+    id,
+    mesh,
+    x: pose.x,
+    y: pose.y,
+    z: pose.z,
+    yaw: pose.yaw,
+    visX: pose.x,
+    visY: pose.y,
+    visZ: pose.z,
+    visYaw: pose.yaw,
+  });
+}
+
+function removeRemote(game: Game, id: string): void {
+  const remote = game.remotes.get(id);
+  if (!remote) return;
+  game.scene.remove(remote.mesh);
+  disposeAvatar(remote.mesh);
+  game.remotes.delete(id);
+}
+
+function lerpRemotes(game: Game, dt: number): void {
+  const k = 1 - Math.exp(-dt * PLAYER.remoteLerp);
+  for (const remote of game.remotes.values()) {
+    remote.visX += (remote.x - remote.visX) * k;
+    remote.visY += (remote.y - remote.visY) * k;
+    remote.visZ += (remote.z - remote.visZ) * k;
+    remote.visYaw += (remote.yaw - remote.visYaw) * k;
+    remote.mesh.position.set(remote.visX, remote.visY, remote.visZ);
+    remote.mesh.rotation.y = remote.visYaw;
+  }
 }
 
 function setupScene(game: Game): void {
@@ -144,7 +360,6 @@ function setupScene(game: Game): void {
   game.scene.add(game.brushCursor.mesh);
   game.scene.add(game.pour.points);
 
-  // Soft ground shadow disc under the map for presence
   const disc = new THREE.Mesh(
     new THREE.CircleGeometry(19, 48),
     new THREE.MeshBasicMaterial({
@@ -189,6 +404,16 @@ function setMode(game: Game, mode: GameMode): void {
   game.pointerDown = false;
   stopPour(game.pour);
   if (mode !== 'terraform') hideBrushCursor(game.brushCursor);
+  game.orbit.controls.enabled = mode !== 'walk';
+  if (mode === 'walk') {
+    ensureSoloWalker(game);
+  }
+}
+
+function ensureSoloWalker(game: Game): void {
+  if (game.localPlayer) return;
+  const id = game.playerId ?? 'local';
+  ensureLocalPlayer(game, id, { x: 0, y: 0, z: 0, yaw: 0 });
 }
 
 function setBrush(game: Game, brush: BrushType): void {
@@ -207,6 +432,7 @@ function bindPointer(game: Game): void {
 
   el.addEventListener('pointerdown', (e) => {
     if (!game.started || e.button !== 0) return;
+    if (game.mode === 'walk') return;
     game.pointerDown = true;
     updatePointer(game, e);
     onToolBegin(game);
@@ -231,6 +457,36 @@ function bindPointer(game: Game): void {
   });
 }
 
+function bindWalkKeys(game: Game): void {
+  window.addEventListener('keydown', (e) => {
+    if (e.target instanceof HTMLInputElement) return;
+    if (e.code === 'ArrowUp') {
+      game.walkKeys.forward = true;
+      e.preventDefault();
+    } else if (e.code === 'ArrowDown') {
+      game.walkKeys.back = true;
+      e.preventDefault();
+    } else if (e.code === 'ArrowLeft') {
+      game.walkKeys.turnLeft = true;
+      e.preventDefault();
+    } else if (e.code === 'ArrowRight') {
+      game.walkKeys.turnRight = true;
+      e.preventDefault();
+    } else if (e.code === 'Space') {
+      game.walkKeys.jump = true;
+      if (game.mode === 'walk') e.preventDefault();
+    }
+  });
+
+  window.addEventListener('keyup', (e) => {
+    if (e.code === 'ArrowUp') game.walkKeys.forward = false;
+    else if (e.code === 'ArrowDown') game.walkKeys.back = false;
+    else if (e.code === 'ArrowLeft') game.walkKeys.turnLeft = false;
+    else if (e.code === 'ArrowRight') game.walkKeys.turnRight = false;
+    else if (e.code === 'Space') game.walkKeys.jump = false;
+  });
+}
+
 function updatePointer(game: Game, e: PointerEvent): void {
   const rect = game.canvas.getBoundingClientRect();
   game.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -244,6 +500,7 @@ function hitTerrain(game: Game): THREE.Intersection | null {
 }
 
 function onToolBegin(game: Game): void {
+  if (game.mode === 'walk') return;
   const hit = hitTerrain(game);
   if (!hit?.point) return;
 
@@ -261,6 +518,10 @@ function onToolBegin(game: Game): void {
 }
 
 function onToolMove(game: Game): void {
+  if (game.mode === 'walk') {
+    hideBrushCursor(game.brushCursor);
+    return;
+  }
   const hit = hitTerrain(game);
   if (!hit?.point) {
     hideBrushCursor(game.brushCursor);
@@ -294,7 +555,22 @@ function resize(game: Game): void {
 
 function frame(game: Game): void {
   const dt = Math.min(game.clock.getDelta(), 0.05);
-  updateOrbit(game.orbit, dt);
+
+  if (game.mode === 'walk' && game.localPlayer) {
+    game.localPlayer = tickMotor(game.localPlayer, game.walkKeys, dt, game.terrain.heights);
+    syncLocalAvatar(game);
+    applyThirdPerson(game.orbit.camera, game.localPlayer);
+    if (game.mp && game.roomCode) {
+      game.poseAcc += dt;
+      if (game.poseAcc >= 1 / PLAYER.poseHz) {
+        sendLocalPose(game);
+      }
+    }
+  } else {
+    updateOrbit(game.orbit, dt);
+  }
+
+  lerpRemotes(game, dt);
 
   if (game.started) {
     flushIfDirty(game.terrain);

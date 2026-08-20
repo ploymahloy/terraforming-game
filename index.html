@@ -20,6 +20,14 @@
         <h1 class="brand">Terraform</h1>
         <p class="boot-sub">Choose a base terrain to begin shaping your world.</p>
         <div id="terrain-picker" class="terrain-picker"></div>
+        <div class="join-row">
+          <label class="join-label" for="join-code">Join space</label>
+          <div class="join-cluster">
+            <input id="join-code" type="text" maxlength="8" autocomplete="off" spellcheck="false" placeholder="Code" />
+            <button type="button" id="join-space">Join</button>
+          </div>
+          <p id="join-error" class="join-error hidden"></p>
+        </div>
       </div>
     </div>
 
@@ -30,8 +38,13 @@
           <button type="button" data-mode="terraform" class="active">Shape</button>
           <button type="button" data-mode="water">Water</button>
           <button type="button" data-mode="life">Life</button>
+          <button type="button" data-mode="walk">Walk</button>
         </div>
-        <div class="hint">RMB orbit · A/D pan · scroll zoom · LMB tool</div>
+        <div class="share-cluster">
+          <button type="button" id="share-space">Share space</button>
+          <span id="share-code" class="share-code hidden"></span>
+        </div>
+        <div class="hint" id="hud-hint">RMB orbit · A/D pan · scroll zoom · LMB tool</div>
       </header>
 
       <aside class="tool-panel" id="tool-panel">
